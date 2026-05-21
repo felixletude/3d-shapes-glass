@@ -1,0 +1,17 @@
+{
+  "name": "3d-letude-glass",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host",
+    "build": "vite build",
+    "preview": "vite preview --host"
+  },
+  "dependencies": {
+    "three": "^0.184.0",
+    "tweakpane": "^4.0.5",
+    "vite": "latest"
+  },
+  "devDependencies": {}
+}
