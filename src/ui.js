@@ -27,6 +27,12 @@ export function setupPane({ params, services, onModelChange, onAxisChange, onSca
 	glass.addBinding(params, 'attenuationDistance', { label: 'attenuation', min: 0.5, max: 500, step: 1 }).on('change', onGlassChange)
 	glass.addBinding(params, 'iridescence', { min: 0, max: 1, step: 0.01 }).on('change', onGlassChange)
 
+	const sides = effect.addFolder({ title: 'Side Dispersion' })
+	sides.addBinding(params, 'sideDispersion', { label: 'dispersion', min: 0, max: 4, step: 0.05 }).on('change', onGlassChange)
+	sides.addBinding(params, 'sideBands', { label: 'bands', min: 1, max: 8, step: 1 }).on('change', onGlassChange)
+	sides.addBinding(params, 'sideSaturation', { label: 'saturation', min: 0, max: 2, step: 0.05 }).on('change', onGlassChange)
+	sides.addBinding(params, 'sideEdgeGlow', { label: 'edge glow', min: 0, max: 3, step: 0.05 }).on('change', onGlassChange)
+
 	const post = effect.addFolder({ title: 'Post' })
 	post.addBinding(params, 'bloomStrength', { label: 'bloom', min: 0, max: 1.2, step: 0.01 }).on('change', onPostChange)
 	post.addBinding(params, 'bloomRadius', { label: 'radius', min: 0, max: 1, step: 0.01 }).on('change', onPostChange)

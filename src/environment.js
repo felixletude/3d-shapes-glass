@@ -14,8 +14,8 @@ export function setupStudioLights(scene) {
 
 export function createStudioTexture() {
 	const canvas = document.createElement('canvas')
-	canvas.width = 2048
-	canvas.height = 1024
+	canvas.width = 4096
+	canvas.height = 2048
 
 	const ctx = canvas.getContext('2d')
 	ctx.fillStyle = '#060607'
@@ -29,18 +29,31 @@ export function createStudioTexture() {
 		ctx.fillStyle = gradient
 		ctx.fillRect(0, 0, canvas.width, canvas.height)
 	}
+	const softbox = (x, y, width, height, color, blur = 140) => {
+		ctx.save()
+		ctx.shadowColor = color
+		ctx.shadowBlur = blur
+		ctx.fillStyle = color
+		ctx.fillRect(x, y, width, height)
+		ctx.restore()
+	}
 
-	glow(1080, 230, 1350, 'rgba(255, 255, 255, 1)', 'rgba(252, 254, 255, 0.95)')
-	glow(560, 800, 1180, 'rgba(255, 255, 255, 1)', 'rgba(248, 251, 255, 0.82)')
-	glow(1660, 740, 900, 'rgba(255, 255, 255, 0.92)', 'rgba(230, 236, 245, 0.46)')
-	glow(260, 340, 880, 'rgba(255, 255, 255, 0.9)', 'rgba(238, 242, 248, 0.5)')
+	glow(2160, 460, 1600, 'rgba(255, 255, 255, 0.9)', 'rgba(252, 254, 255, 0.35)')
+	glow(1120, 1600, 1300, 'rgba(255, 255, 255, 0.72)', 'rgba(248, 251, 255, 0.28)')
+	glow(3320, 1480, 980, 'rgba(210, 226, 255, 0.66)', 'rgba(145, 176, 255, 0.22)')
+	glow(520, 680, 940, 'rgba(255, 236, 210, 0.58)', 'rgba(255, 190, 120, 0.16)')
+
+	softbox(2550, 155, 820, 96, 'rgba(255, 255, 255, 1)', 80)
+	softbox(450, 1020, 980, 130, 'rgba(255, 255, 255, 0.95)', 120)
+	softbox(3150, 1180, 420, 620, 'rgba(205, 224, 255, 0.82)', 110)
+	softbox(1130, 250, 220, 1040, 'rgba(255, 238, 214, 0.52)', 150)
 
 	const band = ctx.createLinearGradient(0, 0, canvas.width, 0)
 	band.addColorStop(0.22, 'rgba(0, 0, 0, 0)')
-	band.addColorStop(0.34, 'rgba(0, 0, 0, 0.12)')
+	band.addColorStop(0.34, 'rgba(0, 0, 0, 0.3)')
 	band.addColorStop(0.48, 'rgba(0, 0, 0, 0.02)')
-	band.addColorStop(0.62, 'rgba(255, 255, 255, 0.42)')
-	band.addColorStop(0.78, 'rgba(0, 0, 0, 0.1)')
+	band.addColorStop(0.62, 'rgba(255, 255, 255, 0.62)')
+	band.addColorStop(0.78, 'rgba(0, 0, 0, 0.24)')
 	band.addColorStop(1, 'rgba(0, 0, 0, 0)')
 	ctx.fillStyle = band
 	ctx.fillRect(0, 0, canvas.width, canvas.height)

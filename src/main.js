@@ -11,8 +11,8 @@ const renderer = new THREE.WebGPURenderer({ antialias: false })
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
 renderer.setSize(window.innerWidth, window.innerHeight)
 renderer.setClearColor(0x000000, 1)
-renderer.toneMapping = THREE.AgXToneMapping
-renderer.toneMappingExposure = 1.55
+renderer.toneMapping = THREE.ACESFilmicToneMapping
+renderer.toneMappingExposure = 1.15
 document.body.append(renderer.domElement)
 
 await renderer.init()
@@ -125,7 +125,10 @@ pane = setupPane({
 	onGeometryChange: () => reloadModel(false),
 	onGlassChange: logo.setGlassMaterial,
 	onPostChange: post.update,
-	onEnvironmentChange: () => updateEnvironment(scene, params),
+	onEnvironmentChange: () => {
+		updateEnvironment(scene, params)
+		logo.updateEnvironmentIntensity()
+	},
 	onExport: handleExport
 })
 
