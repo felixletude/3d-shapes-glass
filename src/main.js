@@ -1,224 +1,141 @@
-import * as THREE from 'three'
-import { SVGLoader } from 'three/examples/jsm/loaders/SVGLoader.js'
-import { Pane } from 'tweakpane'
+import * as THREE from 'three/webgpu'
+import { DEFAULT_SPIN, SERVICES, TAU, ease, params } from './config.js'
+import { loadStudioEnvironment, setupStudioLights, updateEnvironment } from './environment.js'
+import { exportPngSequence } from './export.js'
+import { createModelController } from './model.js'
+import { createPostPipeline } from './post.js'
+import { setupPane } from './ui.js'
+import './styles.css'
 
-const SERVICES = {
-	'Audio Production': '/services/audio-production.svg',
-	Design: '/services/design.svg',
-	Merch: '/services/merch.svg',
-	'Post Production': '/services/post-production.svg',
-	'Visual Production': '/services/visual-production.svg'
-}
-
-const params = {
-	model: 'Design',
-	axis: 'Y',
-	autoRotate: true,
-	duration: 4,
-	scale: 0.85,
-	depth: 8,
-	bevel: 0.15,
-	color: '#f0f0f0',
-	background: '#9597A7'
-}
-
-// --- renderer, scene, camera ---
-
-const renderer = new THREE.WebGLRenderer({ antialias: true })
+const renderer = new THREE.WebGPURenderer({ antialias: false })
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
 renderer.setSize(window.innerWidth, window.innerHeight)
+renderer.setClearColor(0x000000, 1)
+renderer.toneMapping = THREE.AgXToneMapping
+renderer.toneMappingExposure = 1.55
 document.body.append(renderer.domElement)
 
+await renderer.init()
+
 const scene = new THREE.Scene()
-scene.background = new THREE.Color(params.background)
+scene.background = null
+scene.environmentIntensity = params.environmentIntensity
+setupStudioLights(scene)
 
 const camera = new THREE.PerspectiveCamera(38, window.innerWidth / window.innerHeight, 0.01, 100)
 camera.position.set(0, 0, 9.2)
 
-// --- lights ---
+const logo = createModelController({ scene, params, services: SERVICES })
+const post = createPostPipeline({ renderer, scene, camera, params })
+const drag = { active: false, x: 0, y: 0, origin: 0, target: 0 }
 
-scene.add(new THREE.HemisphereLight(0xffffff, 0x6f7280, 2.2))
-
-const key = new THREE.DirectionalLight(0xffffff, 2.4)
-key.position.set(3, 5, 6)
-scene.add(key)
-
-// --- model group ---
-
-const model = new THREE.Group()
-scene.add(model)
-
-const loader = new SVGLoader()
-const cache = new Map()
-const mat = new THREE.MeshStandardMaterial({ color: params.color, roughness: 0.5, side: THREE.DoubleSide })
-
-const TAU = Math.PI * 2
-const drag = { active: false, x: 0, y: 0, origin: 0 }
-
-let requestId = 0
-let spin = 0
-let spinTarget = 0
-let fitScale = 1
-let seqT = 0
+let spin = DEFAULT_SPIN
+let time = 0
 let prevT = 0
+let exporting = false
 let pane
 
-// --- easing ---
+function applyRotation() {
+	logo.group.rotation.set(0, 0, 0)
+	logo.group.rotation[params.axis.toLowerCase()] = spin
+}
 
-const qInOut = t =>
-	t < 0.5 ? 8 * t ** 4 : 1 - (-2 * t + 2) ** 4 / 2
+function setFrameTime(nextTime) {
+	time = nextTime
+	spin = ease(time / params.duration) * TAU
+	applyRotation()
+}
 
-const invQ = y => {
-	if (y <= 0 || y >= 1) return y <= 0 ? 0 : 1
-	let lo = 0, hi = 1
-	for (let i = 12; i--;) {
-		const m = (lo + hi) / 2
-		if ((m < 0.5 ? 8 * m ** 4 : 1 - (-2 * m + 2) ** 4 / 2) < y) lo = m; else hi = m
+async function reloadModel(resetSpin = false) {
+	await logo.loadModel()
+	if (resetSpin) spin = DEFAULT_SPIN
+	applyRotation()
+}
+
+async function handleExport() {
+	if (exporting) return
+	exporting = true
+
+	try {
+		await exportPngSequence({
+			params,
+			renderer,
+			camera,
+			renderFrame: post.render,
+			setFrameTime
+		})
+	} finally {
+		exporting = false
 	}
-	return (lo + hi) / 2
 }
 
-const syncSeq = () => { seqT = invQ(((spin % TAU) / TAU + 1) % 1) * params.duration }
-
-// --- model loading ---
-
-const getSvg = name =>
-	cache.get(name) ?? cache.set(name, loader.loadAsync(SERVICES[name])).get(name)
-
-const applyRot = () => {
-	model.rotation.set(0, 0, 0)
-	model.rotation[params.axis.toLowerCase()] = spin
-}
-
-const updMat = () => {
-	mat.color.set(params.color)
-	scene.background.set(params.background)
-}
-
-const updScale = () => { model.scale.setScalar(fitScale * params.scale) }
-
-const clearModel = () => {
-	for (const c of model.children) {
-		if (c.geometry) c.geometry.dispose()
-		if (c.material && c.material !== mat) c.material.dispose()
-	}
-	model.clear()
-}
-
-async function loadModel(reset) {
-	const id = ++requestId
-	const svg = await getSvg(params.model).catch(() => null)
-	if (!svg || id !== requestId) return
-
-	const bounds = new THREE.Box3()
-	const extrude = {
-		depth: params.depth,
-		bevelEnabled: params.bevel > 0,
-		bevelSize: params.bevel,
-		bevelThickness: params.bevel,
-		bevelSegments: 4,
-		curveSegments: 64
-	}
-
-	const meshes = []
-	for (const path of svg.paths) {
-		for (const shape of SVGLoader.createShapes(path)) {
-			const g = new THREE.ExtrudeGeometry(shape, extrude)
-			g.computeVertexNormals()
-			g.computeBoundingBox()
-			bounds.union(g.boundingBox)
-			meshes.push(new THREE.Mesh(g, mat))
-		}
-	}
-
-	if (bounds.isEmpty()) return
-
-	const c = bounds.getCenter(new THREE.Vector3())
-	for (const m of meshes) m.geometry.translate(-c.x, -c.y, -c.z)
-
-	clearModel()
-	model.add(...meshes)
-
-	const s = bounds.getSize(new THREE.Vector3())
-	fitScale = 4.5 / Math.max(s.x, s.y, s.z)
-	updScale()
-	if (reset) spin = 0
-	applyRot()
-}
-
-// --- ui ---
-
-function setupPane() {
-	pane = new Pane({ title: 'Shape' })
-	const mk = {}
-	for (const k in SERVICES) mk[k] = k
-	pane.addBinding(params, 'model', { options: mk }).on('change', () => loadModel(true))
-	pane.addBinding(params, 'axis', { options: { X: 'X', Y: 'Y' } }).on('change', () => { spin = 0; applyRot() })
-	pane.addBinding(params, 'autoRotate').on('change', () => params.autoRotate && syncSeq())
-	pane.addBinding(params, 'duration', { label: 'seq (s)', min: 1, max: 10, step: 0.1 })
-	pane.addBinding(params, 'scale', { min: 0.4, max: 1.6, step: 0.01 }).on('change', updScale)
-	pane.addBinding(params, 'depth', { min: 1, max: 20, step: 0.1 }).on('change', () => loadModel(false))
-	pane.addBinding(params, 'bevel', { min: 0, max: 0.8, step: 0.01 }).on('change', () => loadModel(false))
-	pane.addBinding(params, 'color').on('change', updMat)
-	pane.addBinding(params, 'background').on('change', updMat)
-}
-
-// --- pointer ---
-
-const onDown = e => {
-	if (e.button !== 0) return
+function onPointerDown(event) {
+	if (event.button !== 0) return
 	drag.active = true
-	drag.x = e.clientX; drag.y = e.clientY
+	drag.x = event.clientX
+	drag.y = event.clientY
 	drag.origin = spin
-	spinTarget = spin
-	syncSeq()
+	drag.target = spin
 	params.autoRotate = false
 	pane.refresh()
-	e.target.setPointerCapture(e.pointerId)
+	event.target.setPointerCapture(event.pointerId)
 }
 
-const onMove = e => {
+function onPointerMove(event) {
 	if (!drag.active) return
-	const d = params.axis === 'X' ? e.clientY - drag.y : e.clientX - drag.x
-	spinTarget = drag.origin + d * 0.008
+	const delta = params.axis === 'X' ? event.clientY - drag.y : event.clientX - drag.x
+	drag.target = drag.origin + delta * 0.008
 }
 
-const onUp = e => {
+function onPointerUp(event) {
 	drag.active = false
-	if (e.target.hasPointerCapture(e.pointerId)) e.target.releasePointerCapture(e.pointerId)
+	if (event.target.hasPointerCapture(event.pointerId)) event.target.releasePointerCapture(event.pointerId)
 }
 
-// --- lifecycle ---
-
-const onResize = () => {
+function onResize() {
 	camera.aspect = window.innerWidth / window.innerHeight
 	camera.updateProjectionMatrix()
 	renderer.setSize(window.innerWidth, window.innerHeight)
 }
 
-const onFrame = time => {
-	const dt = (time - prevT) / 1000
-	prevT = time
+function onFrame(timestamp) {
+	const dt = (timestamp - prevT) / 1000
+	prevT = timestamp
 
 	if (params.autoRotate) {
-		seqT = (seqT + dt) % params.duration
-		spin = qInOut(seqT / params.duration) * TAU
+		time = (time + dt) % params.duration
+		spin = ease(time / params.duration) * TAU
 	} else {
-		if (!drag.active) spinTarget += (spin - spinTarget) * 0.04
-		spin += (spinTarget - spin) * 0.2
+		spin += (drag.target - spin) * 0.2
 	}
 
-	applyRot()
-	renderer.render(scene, camera)
+	applyRotation()
+	post.render()
 }
 
-setupPane()
-loadModel(true)
+pane = setupPane({
+	params,
+	services: SERVICES,
+	onModelChange: () => reloadModel(true),
+	onAxisChange: () => {
+		spin = DEFAULT_SPIN
+		applyRotation()
+	},
+	onScaleChange: logo.updateScale,
+	onGeometryChange: () => reloadModel(false),
+	onGlassChange: logo.setGlassMaterial,
+	onPostChange: post.update,
+	onEnvironmentChange: () => updateEnvironment(scene, params),
+	onExport: handleExport
+})
+
+await loadStudioEnvironment(renderer, scene, params)
+await reloadModel(true)
 
 addEventListener('resize', onResize)
-renderer.domElement.addEventListener('pointerdown', onDown)
-renderer.domElement.addEventListener('pointermove', onMove)
-renderer.domElement.addEventListener('pointerup', onUp)
-renderer.domElement.addEventListener('pointercancel', onUp)
-renderer.domElement.addEventListener('contextmenu', e => e.preventDefault())
+renderer.domElement.addEventListener('pointerdown', onPointerDown)
+renderer.domElement.addEventListener('pointermove', onPointerMove)
+renderer.domElement.addEventListener('pointerup', onPointerUp)
+renderer.domElement.addEventListener('pointercancel', onPointerUp)
+renderer.domElement.addEventListener('contextmenu', event => event.preventDefault())
 renderer.setAnimationLoop(onFrame)
