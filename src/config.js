@@ -35,8 +35,8 @@ export const params = {
 	chromaticAberration: 0.15,
 	exportFps: 60,
 	exportLoops: 1,
-	exportWidth: 2000,
-	exportHeight: 2000
+	exportWidth: 1500,
+	exportHeight: 1500
 }
 
 export const TAU = Math.PI * 2

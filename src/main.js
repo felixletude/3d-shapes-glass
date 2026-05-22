@@ -55,6 +55,7 @@ async function reloadModel(resetSpin = false) {
 async function handleExport() {
 	if (exporting) return
 	exporting = true
+	renderer.setAnimationLoop(null)
 
 	try {
 		await exportPngSequence({
@@ -66,6 +67,8 @@ async function handleExport() {
 		})
 	} finally {
 		exporting = false
+		prevT = performance.now()
+		renderer.setAnimationLoop(onFrame)
 	}
 }
 
